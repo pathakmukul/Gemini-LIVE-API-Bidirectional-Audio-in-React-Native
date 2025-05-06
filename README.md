@@ -66,10 +66,7 @@ Role: Ensures the AI’s responses are heard clearly through the device’s main
 ## Setup & Installation
 
 1. **Clone the repository:**
-   ```sh
-   git clone <your-repo-url>
-   cd theApp
-   ```
+
 2. **Install dependencies:**
    ```sh
    npm install
