@@ -97,9 +97,7 @@ const startRecording = async () => {
       await voiceProcessor.start(frameLength, AUDIO_SAMPLE_RATE);
       
       isRecording = true;
-      console.log('AudioInputService: Voice processing started successfully');
-      console.log(`AudioInputService: Streaming audio at ${AUDIO_SAMPLE_RATE} Hz`);
-      
+      console.log('🗣️⛮AudioInputService: Voice processing started at', AUDIO_SAMPLE_RATE, 'Hz');
       return true;
     } else {
       console.error('AudioInputService: No recording permission');

@@ -85,23 +85,10 @@ const configureAudio = async () => {
  */
 const _createWavFromPcm = (pcmData, sampleRate, numChannels, bitsPerSample) => {
   try {
-    console.log(`Creating WAV from PCM data:`);
-    console.log(`  - Sample rate: ${sampleRate}Hz`);
-    console.log(`  - Channels: ${numChannels}`);
-    console.log(`  - Bits per sample: ${bitsPerSample}`);
-    
-    // Convert ArrayBuffer to Uint8Array if needed
     const pcmBytes = pcmData instanceof ArrayBuffer ? new Uint8Array(pcmData) : pcmData;
-    console.log(`  - PCM data size: ${pcmBytes.length} bytes`);
-    
-    // Create WAV header
     const header = _createWavHeader(sampleRate, bitsPerSample, numChannels, pcmBytes.length);
-    console.log(`  - WAV header size: ${header.length} bytes`);
-    
-    // Combine header and PCM data
     const wavData = _combineWavData(header, pcmBytes);
-    console.log(`  - Total WAV size: ${wavData.length} bytes`);
-    
+    console.log(`📻👷 AudioOutputService: Created WAV (${wavData.length} bytes) from PCM (${pcmBytes.length} bytes) at ${sampleRate}Hz, ${numChannels}ch, ${bitsPerSample}bit`);
     return wavData;
   } catch (error) {
     console.error('Error creating WAV from PCM:', error);
@@ -309,15 +296,16 @@ const _processQueue = async () => {
     }
     
     // Log detailed info about the audio data for debugging
-    console.log('AudioOutputService: Processing audio data:');
-    console.log(`  - Type: ${typeof audioData}`);
-    if (audioData instanceof ArrayBuffer) {
-      console.log(`  - ArrayBuffer length: ${audioData.byteLength} bytes`);
-    } else if (audioData instanceof Uint8Array) {
-      console.log(`  - Uint8Array length: ${audioData.length} bytes`);
-    } else if (typeof audioData === 'string') {
-      console.log(`  - String length: ${audioData.length} chars`);
-    }
+    console.log(
+      `🔊🔊 AudioOutputService: audioData type=${typeof audioData}` +
+      (audioData instanceof ArrayBuffer
+        ? `, ArrayBuffer length=${audioData.byteLength}`
+        : audioData instanceof Uint8Array
+        ? `, Uint8Array length=${audioData.length}`
+        : typeof audioData === 'string'
+        ? `, String length=${audioData.length}`
+        : '')
+    );
     
     // Use detected sample rate or fallback to default
     const outputSampleRate = sampleRate || OUTPUT_SAMPLE_RATE;
@@ -454,12 +442,7 @@ const playAudioChunk = async (audioData) => {
         : 'no data field';
     }
     
-    console.log(`AudioOutputService: Received audio chunk to play`);
-    console.log(`  - Type: ${dataType}`);
-    console.log(`  - Size: ${dataSize}`);
-    if (dataType === 'object' && audioData.mimeType) {
-      console.log(`  - MIME type: ${audioData.mimeType}`);
-    }
+    console.log(` 🎵 AudioOutputService: Received audio chunk to play. Type: ${dataType}, Size: ${dataSize}${dataType === 'object' && audioData.mimeType ? `, MIME type: ${audioData.mimeType}` : ''}`);
     
     // Add to queue
     audioQueue.push(audioData);
@@ -520,10 +503,10 @@ const clearPlaybackQueue = async () => {
       await _cleanupSoundObject(soundObject);
       soundObject = null;
     } catch (error) {
-      console.error('AudioOutputService: Error stopping playback:', error);
+      console.error('🚨 AudioOutputService: Error stopping playback:', error);
     }
   }
-  
+
   isPlaying = false;
 };
 

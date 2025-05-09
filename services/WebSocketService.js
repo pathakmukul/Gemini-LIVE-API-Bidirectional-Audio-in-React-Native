@@ -83,11 +83,7 @@ const connect = () => {
           dataSize = event.data.size;
         }
         
-        console.log(`Received binary data from WebSocket:`);
-        console.log(`  - Size: ${dataSize} bytes`);
-        console.log(`  - Type: ${dataType}`);
-        console.log(`  - MIME type: ${event.data.type || 'none'}`);
-        console.log(`  - Received at: ${new Date().toISOString()}`);
+        console.log(`🪵 Received binary data from WebSocket: Size: ${dataSize} bytes, Type: ${dataType}, MIME type: ${event.data.type || 'none'}, Received at: ${new Date().toISOString()}`);
         
         // Track binary message types and sizes for debugging
         if (!window._binaryMessageTypes) {
@@ -101,9 +97,7 @@ const connect = () => {
         
         const avgSize = window._binaryMessageSizes.reduce((sum, size) => sum + size, 0) / window._binaryMessageSizes.length;
         
-        console.log(`  - Binary messages received: ${window._binaryMessageSizes.length}`);
-        console.log(`  - Average binary message size: ${avgSize.toFixed(2)} bytes`);
-        console.log(`  - Binary message types received: ${JSON.stringify(window._binaryMessageTypes)}`);
+        console.log(`🪵 Binary messages received: ${window._binaryMessageSizes.length}, Average binary message size: ${avgSize.toFixed(2)} bytes, Binary message types received: ${JSON.stringify(window._binaryMessageTypes)}`);
         
         // Process the binary data
         if (event.data instanceof ArrayBuffer) {
@@ -128,28 +122,24 @@ const connect = () => {
         }
       } else if (typeof event.data === 'string') {
         // Handle text data (likely JSON)
-        console.log(`Received text data from WebSocket:`);
-        console.log(`  - Length: ${event.data.length} characters`);
-        console.log(`  - First 100 chars: ${event.data.substring(0, 100)}...`);
+        console.log(`🪵 Received text data from WebSocket: Length: ${event.data.length} characters, First 100 chars: ${event.data.substring(0, 100)}...`);
         
         try {
           const message = JSON.parse(event.data);
-          console.log('Successfully parsed JSON message with keys:', Object.keys(message).join(', '));
+          console.log(`Successfully parsed JSON message with keys: ${Object.keys(message).join(', ')}`);
           handleReceivedMessage(message);
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-          console.error('Raw message content:', event.data.substring(0, 200) + '...');
+          console.error(`Error parsing WebSocket message: ${error} | Raw message content: ${event.data.substring(0, 200)}...`);
           onErrorCallback?.('Error parsing server message');
         }
       } else {
-        console.warn('Received unknown data type from WebSocket:', typeof event.data);
+        console.warn(`Received unknown data type from WebSocket: ${typeof event.data}`);
         if (typeof event.data === 'object') {
-          console.warn('Object properties:', Object.keys(event.data).join(', '));
+          console.warn(`Object properties: ${Object.keys(event.data).join(', ')}`);
         }
       }
     } catch (error) {
-      console.error('Error in WebSocket onmessage handler:', error);
-      console.error('Error stack:', error.stack);
+      console.error(`Error in WebSocket onmessage handler: ${error} | Stack: ${error.stack}`);
       onErrorCallback?.('Error processing server message');
     }
   };
@@ -180,16 +170,13 @@ const sendInitialSetup = () => {
     };
     
     // Log information about the setup message
-    console.log('WebSocketService: Sending initial setup to Gemini Live API:');
-    console.log(`  - Model: ${MODEL_NAME}`);
-    console.log(`  - Full setup message: ${JSON.stringify(setupMessage)}`);
+    console.log(`WebSocketService: Sending initial setup to Gemini Live API: Model: ${MODEL_NAME}, Full setup message: ${JSON.stringify(setupMessage)}`);
     
     // Send the setup message as a JSON string
     ws.send(JSON.stringify(setupMessage));
     return true;
   } catch (error) {
-    console.error('WebSocketService: Error sending initial setup:', error);
-    console.error('Error stack:', error.stack);
+    console.error(`WebSocketService: Error sending initial setup: ${error} | Stack: ${error.stack}`);
     return false;
   }
 };
@@ -200,9 +187,7 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
   if (!window._binaryDataProcessed) window._binaryDataProcessed = 0;
   window._binaryDataProcessed++;
   
-  console.log(`WebSocketService: Processing binary data #${window._binaryDataProcessed}`);
-  console.log(`  - Data type: ${binaryData.constructor.name}`);
-  console.log(`  - Size: ${binaryData instanceof ArrayBuffer ? binaryData.byteLength : binaryData.size} bytes`);
+  console.log(`WebSocketService: Processing binary data #${window._binaryDataProcessed} | Data type: ${binaryData.constructor.name} | Size: ${(binaryData instanceof ArrayBuffer ? binaryData.byteLength : binaryData.size)} bytes`);
   
   // Determine if this is JSON or audio data
   // For JSON, we expect the first few bytes to be ASCII characters like '{', '"', etc.
@@ -212,10 +197,10 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
   let bytes;
   if (binaryData instanceof ArrayBuffer) {
     bytes = new Uint8Array(binaryData);
-    console.log(`  - Converted ArrayBuffer to Uint8Array for inspection`);
+    // console.log(`Converted ArrayBuffer to Uint8Array for inspection`);
   } else if (binaryData instanceof Blob) {
     // For Blob, we need to read it first
-    console.log(`  - Need to read Blob data for inspection`);
+    console.log(`Need to read Blob data for inspection`);
     
     // Create a FileReader to read the Blob
     const reader = new FileReader();
@@ -224,19 +209,19 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
       const arrayBuffer = this.result;
       bytes = new Uint8Array(arrayBuffer);
       
-      console.log(`  - Successfully read Blob data (${bytes.length} bytes)`);
+      console.log(`Successfully read Blob data (${bytes.length} bytes)`);
       processBinaryBytes(bytes);
     };
     
     reader.onerror = function() {
-      console.error('Error reading Blob data:', this.error);
+      console.error(`Error reading Blob data:`, this.error);
     };
     
     // Start reading the Blob as ArrayBuffer
     reader.readAsArrayBuffer(binaryData);
     return; // Exit early, processing will continue in onload callback
   } else {
-    console.error(`  - Unexpected binary data type: ${typeof binaryData}`);
+    console.error(`Unexpected binary data type: ${typeof binaryData}`);
     return;
   }
   
@@ -248,7 +233,6 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
   // Inner function to process the binary bytes
   function processBinaryBytes(bytes) {
     // Log the first few bytes for debugging
-    console.log('First 16 bytes of binary data:', Array.from(bytes.slice(0, 16)));
     
     // Analyze byte patterns to determine if this is likely JSON or audio
     const looksLikeJson = bytes.length > 0 && (bytes[0] === 123 || bytes[0] === 91); // '{' or '['
@@ -260,33 +244,31 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
       const printableCount = bytes.slice(0, 20).filter(b => b >= 32 && b <= 126).length;
       jsonConfidence = printableCount / Math.min(20, bytes.length);
       
-      console.log(`  - JSON confidence: ${(jsonConfidence * 100).toFixed(1)}% (${printableCount} printable chars in first ${Math.min(20, bytes.length)} bytes)`);
+      // console.log(`JSON confidence: ${(jsonConfidence * 100).toFixed(1)}% (${printableCount} printable chars in first ${Math.min(20, bytes.length)} bytes)`);
     }
     
     if (looksLikeJson || jsonConfidence > 0.7) {
-      console.log('Binary data appears to be JSON, converting to text');
+      console.log(`Binary data appears to be JSON, converting to text`);
       
       // Convert binary to text and parse as JSON
       const textDecoder = new TextDecoder('utf-8');
       const jsonText = textDecoder.decode(bytes);
       
-      console.log(`  - Decoded text length: ${jsonText.length} characters`);
-      console.log(`  - First 100 chars: ${jsonText.substring(0, 100)}...`);
+      // console.log(`Decoded text length: ${jsonText.length} characters`);
       
       try {
         const jsonData = JSON.parse(jsonText);
-        console.log(`  - Successfully parsed JSON with keys: ${Object.keys(jsonData).join(', ')}`);
+        // console.log(`Successfully parsed JSON with keys: ${Object.keys(jsonData).join(', ')}`);
         
         // Special handling for setup completion message
         if (jsonData.setupComplete !== undefined) {
-          console.log('Received setup completion acknowledgment from Gemini Live API');
+          console.log('🤖 Received setup completion acknowledgment from Gemini Live API');
         }
         
         // Process the JSON message
         handleReceivedMessage(jsonData);
       } catch (error) {
-        console.error('Error parsing binary JSON data:', error);
-        console.error('Raw JSON text:', jsonText.substring(0, 200) + '...');
+        console.error(`Error parsing binary JSON data: ${error} | Raw JSON text: ${jsonText.substring(0, 200)}...`);
       }
     } else {
       // This is likely raw PCM audio data
@@ -311,8 +293,7 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
           }
         }
         
-        console.log(`  - Audio analysis: ${nonZeroSamples}/50 non-zero samples, ${bigChanges}/49 big changes between samples`);
-        console.log(`  - Data likely ${nonZeroSamples > 10 ? 'contains' : 'does NOT contain'} actual audio content`);
+        console.log(` 🎛️🎛️ Audio analysis: ${nonZeroSamples}/50 non-zero samples, ${bigChanges}/49 big changes between samples | Data likely ${nonZeroSamples > 10 ? 'contains' : 'does NOT contain'} actual audio content`);
       }
       
       // Regardless of analysis, try to play it as audio
@@ -359,7 +340,7 @@ const sendAudioChunk = (audioBytes) => {
 
   // Ensure we have ArrayBuffer
   if (!(audioBytes instanceof ArrayBuffer)) {
-    console.error('WebSocketService: ⚠️ sendAudioChunk requires ArrayBuffer, received:', typeof audioBytes);
+    console.error('WebSocketService: sendAudioChunk requires ArrayBuffer, received:', typeof audioBytes);
     // Attempt conversion if possible (e.g., from Uint8Array or Blob) - add robust handling if needed
     return; // Stop if not ArrayBuffer
   }
@@ -389,32 +370,22 @@ const sendAudioChunk = (audioBytes) => {
     const now = new Date().toISOString();
     const firstBytes = Array.from(new Uint8Array(audioBytes.slice(0, 16))); // Log first few bytes
 
-    console.log(`WebSocketService: Sending audio chunk #${audioChunkCounter}`);
-    console.log(`  - Original type: ArrayBuffer`);
-    console.log(`  - Original size: ${audioBytes.byteLength} bytes`);
-    console.log(`  - First 16 bytes: [${firstBytes.join(', ')}]`);
-    console.log(`  - Base64 size: ${base64Length} characters`);
-    console.log(`  - Approximate audio duration: ${durationMs.toFixed(2)}ms (${(durationMs / 1000).toFixed(2)}s)`);
-    console.log(`  - WebSocket state: ${ws.readyState} (OPEN)`);
-    console.log(`  - Total audio chunks sent in this session: ${audioChunkCounter}`);
-    console.log(`  - Sending JSON payload at: ${now}`);
-    // console.log(`  - Full JSON payload (truncated): ${JSON.stringify(message).substring(0, 200)}...`); // Uncomment for detailed debugging if needed
+    console.log(`🔌🔌  WebSocketService: Sending audio chunk ArrayBuffer #${audioChunkCounter}`);
+
+    // console.log(`🔌🔌  WebSocketService: Sending audio chunk ArrayBuffer #${audioChunkCounter} | Original size: ${audioBytes.byteLength} bytes | Duration: ${durationMs.toFixed(2)}ms (${(durationMs / 1000).toFixed(2)}s) | WebSocket state: ${ws.readyState} (OPEN) | Total audio chunks sent: ${audioChunkCounter}`);
 
     // Send the complete JSON message
     ws.send(JSON.stringify(message));
 
     // Log success and timing
     const endTime = Date.now();
-    console.log(`  - Successfully sent JSON payload with Base64 audio.`);
-    console.log(`  - Send operation took: ${endTime - startTime}ms`);
+    // console.log(`Successfully sent JSON payload with Base64 audio. Send operation took: ${endTime - startTime}ms`);
 
     // Update last sent time for response tracking
     window._lastAudioSentTime = endTime;
 
   } catch (error) {
-    console.error(`WebSocketService: Error processing or sending audio chunk #${audioChunkCounter}:`, error);
-    console.error('  - Error details:', error.message);
-    console.error('  - Error stack:', error.stack);
+    console.error(`WebSocketService: Error processing or sending audio chunk #${audioChunkCounter}: ${error} | Details: ${error.message} | Stack: ${error.stack}`);
     if (onErrorCallback) onErrorCallback('Error sending audio data');
   }
 };
@@ -422,7 +393,7 @@ const sendAudioChunk = (audioBytes) => {
 const handleReceivedMessage = (message) => {
   // Process received JSON messages from the Gemini Live API
   console.log('Processing JSON message from Gemini Live API');
-  console.log('Full message structure:', JSON.stringify(message, null, 2).substring(0, 500) + '...');
+  // console.log('Full message structure:', JSON.stringify(message, null, 2).substring(0, 500) + '...');
   
   // Track message types for debugging
   if (!window._receivedMessageTypes) window._receivedMessageTypes = {};
@@ -447,22 +418,21 @@ const handleReceivedMessage = (message) => {
   
   // Handle event messages (transcript events)
   if (message.event) {
-    console.log('Received event message with properties:', Object.keys(message.event).join(', '));
+    console.log(`🪵 Received event message with properties: ${Object.keys(message.event).join(', ')}`);
     
     // Check for transcript events
     if (message.event.transcript) {
       const transcript = message.event.transcript;
       const isFinal = transcript.is_final || false;
       
-      console.log(`🎙 ${isFinal ? 'FINAL' : 'Interim'} transcript: "${transcript.text}"`);
-      console.log(`  - Is final: ${isFinal}`);
+      console.log(`🪵 🎙 ${isFinal ? 'FINAL' : 'Interim'} transcript: "${transcript.text}" | Is final: ${isFinal}`); // merged 2 logs
       
       // You could display this text in the UI or process it further
     }
     
     // Check for turn completion
     if (message.event.turnComplete) {
-      console.log('✅ Turn complete event received.');
+      console.log('🪵 ✅ Turn complete event received.');
       onTurnCompleteCallback?.();
     }
     
@@ -471,7 +441,7 @@ const handleReceivedMessage = (message) => {
   
   // Check for serverContent structure (main response container)
   if (message.serverContent) {
-    console.log('Received serverContent message with properties:', Object.keys(message.serverContent).join(', '));
+    console.log(`🪵 Received serverContent message with properties: ${Object.keys(message.serverContent).join(', ')}`);
     
     // Check for text responses
     if (
@@ -479,30 +449,27 @@ const handleReceivedMessage = (message) => {
       message.serverContent.modelTurn.parts &&
       message.serverContent.modelTurn.parts.length > 0
     ) {
-      console.log(`Found ${message.serverContent.modelTurn.parts.length} parts in modelTurn`);
+      console.log(`🪵 Found ${message.serverContent.modelTurn.parts.length} parts in modelTurn`);
       
       message.serverContent.modelTurn.parts.forEach((part, index) => {
-        console.log(`Examining part ${index} with properties:`, Object.keys(part).join(', '));
+        console.log(`🪵 Examining part ${index} with properties: ${Object.keys(part).join(', ')}`);
         
         // Handle text responses
         if (part.text) {
-          console.log(`Received text response in part ${index}:`, part.text);
+          console.log(`🪵 Received text response in part ${index}: ${part.text}`);
           // You could display this text in the UI
         }
         
         // Handle inline audio data (might be here instead of binary message)
         if (part.inlineData) {
-          console.log(`Found inlineData in part ${index} with properties:`, Object.keys(part.inlineData).join(', '));
+          console.log(`🪵 Found inlineData in part ${index} with properties: ${Object.keys(part.inlineData).join(', ')}`);
           
           if (part.inlineData.mimeType && part.inlineData.data) {
-            console.log(`Received inline audio data in part ${index}:`);
-            console.log(`  - MIME type: ${part.inlineData.mimeType}`);
-            console.log(`  - Data length: ${part.inlineData.data.length} characters`);
-            console.log(`  - Data type: ${typeof part.inlineData.data}`);
+            console.log(`🪵 Received inline audio data in part ${index}: MIME type: ${part.inlineData.mimeType} | Data length: ${part.inlineData.data.length} characters | Data type: ${typeof part.inlineData.data}`); // merged 4 logs
             
             // First few characters if it's a string
             if (typeof part.inlineData.data === 'string') {
-              console.log(`  - First 20 chars: ${part.inlineData.data.substring(0, 20)}...`);
+              console.log(`🪵 First 20 chars of inline audio data in part ${index}: ${part.inlineData.data.substring(0, 20)}...`);
             }
             
             // Extract the data (it might be Base64 encoded)
@@ -515,42 +482,40 @@ const handleReceivedMessage = (message) => {
               // Convert Node.js Buffer to ArrayBuffer for broader compatibility
               const arrayBuffer = audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength);
               
-              console.log(`Successfully decoded Base64 audio to ArrayBuffer (${arrayBuffer.byteLength} bytes)`);
-              console.log('Sending decoded ArrayBuffer to audio output service');
+              console.log(`🪵 Successfully decoded Base64 audio to ArrayBuffer (${arrayBuffer.byteLength} bytes) | Sending decoded ArrayBuffer to audio output service`); // merged 2 logs
               
               // Pass the decoded ArrayBuffer and mimeType to the callback
               onMessageCallback?.({ type: 'audio', data: arrayBuffer, mimeType: mimeType });
             } catch (decodeError) {
-              console.error("Error decoding Base64 audio data:", decodeError);
-              onErrorCallback?.('Error decoding received audio');
+              console.error(`🚨 Error decoding Base64 audio data: ${decodeError}`); onErrorCallback?.('Error decoding received audio'); // merged 1 log
             }
           } else {
-            console.log(`inlineData in part ${index} is missing mimeType or data properties`);
+            console.log(`🪵 inlineData in part ${index} is missing mimeType or data properties`);
           }
         }
       });
     } else {
-      console.log('No modelTurn or parts found in serverContent');
+      console.log('🪵 No modelTurn or parts found in serverContent');
     }
 
     // Check for interruptions
     if (message.serverContent.interrupted) {
-      console.log('Server interruption detected.');
+      console.log('🪵 Server interruption detected.');
       onInterruptionCallback?.();
     }
 
     // Check for turn completion
     if (message.serverContent.turnComplete) {
-      console.log('Server turn complete.');
+      console.log('🪵 Server turn complete.');
       onTurnCompleteCallback?.();
     }
   } else {
-    console.log('Received message without serverContent, event, or setupComplete structure');
+    console.log('🪵 Received message without serverContent, event, or setupComplete structure');
   }
 
   // Handle errors if present in the message
   if (message.error) {
-    console.error('Received error message from server:', message.error);
+    console.error(`🚨 Received error message from server: ${message.error}`);
     onErrorCallback?.(message.error.message || 'Server error');
   }
 };
