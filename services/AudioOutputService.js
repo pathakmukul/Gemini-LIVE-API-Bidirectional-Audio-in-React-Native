@@ -13,10 +13,16 @@ const OUTPUT_SAMPLE_RATE = 24000; // Gemini outputs at 24kHz
 const OUTPUT_CHANNELS = 1; // Mono
 const OUTPUT_BITS_PER_SAMPLE = 16; // 16-bit PCM
 
+// Buffer aggregation settings to reduce fragmentation
+const BUFFER_CHUNK_THRESHOLD = 3;  // Aggregate this many chunks before playing
+const MAX_BUFFER_WAIT_MS = 300;    // Maximum time to wait for buffer to fill (ms)
+
 // Audio player state
 let soundObject = null;
 let isPlaying = false;
 let audioQueue = [];
+let bufferAggregator = [];         // Stores chunks for aggregation
+let bufferTimer = null;            // Timer for buffer processing
 let tempFileCounter = 0;
 
 // Keep track of InCallManager initialization status
@@ -497,6 +503,110 @@ const _processQueue = async () => {
 };
 
 /**
+ * Combines multiple PCM audio chunks into a single buffer
+ * @param {Array} chunks - Array of audio chunks to combine
+ * @returns {Object} - Combined audio data and sample rate
+ */
+const _combineAudioChunks = (chunks) => {
+  if (!chunks || chunks.length === 0) {
+    return null;
+  }
+  
+  console.log(`AudioOutputService: Combining ${chunks.length} audio chunks`);
+  
+  try {
+    // Extract all PCM data from chunks
+    const pcmDataArray = [];
+    let totalLength = 0;
+    let sampleRate = OUTPUT_SAMPLE_RATE; // Default
+    
+    for (const chunk of chunks) {
+      let pcmData;
+      
+      // Handle the new object format with type, data, and mimeType fields
+      if (chunk && typeof chunk === 'object' && chunk.type === 'audio' && chunk.data) {
+        pcmData = chunk.data;
+        
+        // Parse sample rate from mimeType if available
+        if (chunk.mimeType && chunk.mimeType.includes('rate=')) {
+          const rateMatch = chunk.mimeType.match(/rate=(\d+)/);
+          if (rateMatch && rateMatch[1]) {
+            sampleRate = parseInt(rateMatch[1], 10);
+          }
+        }
+      } else if (typeof chunk === 'string') {
+        // Base64 encoded
+        pcmData = Buffer.from(chunk, 'base64');
+      } else {
+        // Raw PCM data
+        pcmData = chunk;
+      }
+      
+      // Convert all to Uint8Array for consistency
+      if (pcmData instanceof ArrayBuffer) {
+        pcmData = new Uint8Array(pcmData);
+      }
+      
+      if (pcmData instanceof Uint8Array) {
+        pcmDataArray.push(pcmData);
+        totalLength += pcmData.length;
+      }
+    }
+    
+    // Create a combined buffer
+    const combinedBuffer = new Uint8Array(totalLength);
+    let offset = 0;
+    
+    for (const data of pcmDataArray) {
+      combinedBuffer.set(data, offset);
+      offset += data.length;
+    }
+    
+    console.log(`AudioOutputService: Combined ${chunks.length} chunks into ${totalLength} bytes`);
+    return { data: combinedBuffer, sampleRate };
+  } catch (error) {
+    console.error('AudioOutputService: Error combining audio chunks:', error);
+    return null;
+  }
+};
+
+/**
+ * Process the buffered chunks when enough are collected or timeout occurs
+ */
+const _processBufferedChunks = () => {
+  // Clear any existing timer
+  if (bufferTimer) {
+    clearTimeout(bufferTimer);
+    bufferTimer = null;
+  }
+  
+  // If we have chunks to process
+  if (bufferAggregator.length > 0) {
+    console.log(`AudioOutputService: Processing ${bufferAggregator.length} buffered chunks`);
+    
+    // Combine chunks and get the resulting audio data
+    const combined = _combineAudioChunks(bufferAggregator);
+    
+    // Clear the buffer now that we've processed it
+    bufferAggregator = [];
+    
+    if (combined) {
+      // Create a wrapper object for the combined data
+      const combinedChunk = {
+        type: 'audio',
+        data: combined.data,
+        mimeType: `audio/pcm;rate=${combined.sampleRate}`,
+        isAggregated: true
+      };
+      
+      // Add to queue and process
+      audioQueue.push(combinedChunk);
+      _processQueue();
+    }
+  }
+};
+
+/**
  * Play an audio chunk received from the WebSocket
  * @param {ArrayBuffer|Uint8Array|string|Object} audioData - Audio data, possibly Base64 encoded or in an object
  */
@@ -531,12 +641,19 @@ const playAudioChunk = async (audioData) => {
     
     console.log(` 🎵 AudioOutputService: Received audio chunk to play. Type: ${dataType}, Size: ${dataSize}${dataType === 'object' && audioData.mimeType ? `, MIME type: ${audioData.mimeType}` : ''}`);
     
-    // Add to queue
-    audioQueue.push(audioData);
-    console.log(`AudioOutputService: Added audio to queue. Queue length: ${audioQueue.length}`);
+    // Add to buffer aggregator instead of directly to queue
+    bufferAggregator.push(audioData);
+    console.log(`AudioOutputService: Added audio to buffer. Buffer size: ${bufferAggregator.length}`);
     
-    // Process queue
-    _processQueue();
+    // If this is the first chunk in the buffer, start the timer
+    if (bufferAggregator.length === 1) {
+      bufferTimer = setTimeout(_processBufferedChunks, MAX_BUFFER_WAIT_MS);
+    }
+    
+    // If we've reached the threshold, process immediately
+    if (bufferAggregator.length >= BUFFER_CHUNK_THRESHOLD) {
+      _processBufferedChunks();
+    }
   } catch (error) {
     console.error('AudioOutputService: Error queuing audio chunk:', error);
   }
@@ -585,23 +702,38 @@ const cleanupAudioResources = async () => {
  * Clear the audio playback queue and stop current playback
  */
 const clearPlaybackQueue = async () => {
-  console.log('AudioOutputService: Clearing playback queue');
-  
-  // Clear the queue
-  audioQueue = [];
-  
-  // Stop current playback if active
-  if (soundObject && isPlaying) {
-    try {
-      await soundObject.stopAsync();
-      await _cleanupSoundObject(soundObject);
-      soundObject = null;
-    } catch (error) {
-      console.error('🚨 AudioOutputService: Error stopping playback:', error);
+  try {
+    console.log('AudioOutputService: Clearing audio playback queue');
+    
+    // Empty the queue and buffer
+    audioQueue = [];
+    bufferAggregator = [];
+    
+    // Clear any pending buffer timer
+    if (bufferTimer) {
+      clearTimeout(bufferTimer);
+      bufferTimer = null;
     }
+    
+    // Stop current playback if active
+    if (isPlaying && soundObject) {
+      try {
+        await soundObject.stopAsync();
+        console.log('AudioOutputService: Stopped current playback');
+      } catch (stopError) {
+        console.warn('AudioOutputService: Error stopping playback:', stopError);
+      }
+    }
+    
+    // Reset playing state
+    isPlaying = false;
+    
+    console.log('AudioOutputService: Playback queue cleared');
+    return true;
+  } catch (error) {
+    console.error('AudioOutputService: Error clearing playback queue:', error);
+    return false;
   }
-
-  isPlaying = false;
 };
 
 // Clean up temporary files periodically
@@ -635,6 +767,14 @@ configureAudio();
 
 // Set up a timer to clean up temporary files every 5 minutes
 setInterval(cleanupTempFiles, 5 * 60 * 1000);
+
+// Export API for use in other modules
+export {
+  playAudioChunk,
+  clearPlaybackQueue,
+  cleanupAudioResources,
+  cleanupTempFiles,
+};
 
 // Add event listener for app state changes to clean up resources when app is closed
 if (Platform.OS === 'ios') {
