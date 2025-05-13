@@ -10,20 +10,29 @@ A React Native (Expo) application for real-time, bidirectional audio streaming w
   - Streams microphone audio to Gemini Live API over WebSocket.
   - Receives and plays back Gemini's AI-generated audio responses instantly.
 
+- **Acoustic Echo Cancellation (AEC):**
+  - Implements WebRTC-based echo cancellation to prevent audio feedback loops.
+  - Eliminates the problem of the microphone picking up speaker output.
+
 - **Speaker Routing:**
   - Uses `react-native-incall-manager` to force playback through the bottom-firing (loud) speakers, not the earpiece.
+  - Includes robust fallback mechanisms to ensure proper audio routing.
 
 - **High Volume & Clarity:**
   - Ensures maximum volume and clear audio output.
+  - Maintains voice quality while preventing echo/feedback issues.
 
 - **Robust Audio Pipeline:**
   - Handles audio session activation, permissions, and resource cleanup.
+  - Gracefully manages audio processing and routing across different devices.
 
 ---
 
 ## Architecture Overview
 
 ```
+                          [WebRTCAudioService (AEC)]
+                                    |
 [User] <--> [AudioInputService] <--> [WebSocketService] <--> [Gemini Live API]
                                               |
                                     [AudioOutputService]
@@ -35,6 +44,7 @@ A React Native (Expo) application for real-time, bidirectional audio streaming w
 - **AudioInputService:** Captures and streams microphone audio in real-time.
 - **WebSocketService:** Manages the bidirectional WebSocket connection with Gemini, handling both sending and receiving audio.
 - **AudioOutputService:** Plays received audio using `expo-av` and routes it through the loudspeaker with `react-native-incall-manager`.
+- **WebRTCAudioService:** Implements WebRTC-based Acoustic Echo Cancellation (AEC) to prevent audio feedback loops.
 - **PermissionsService:** Handles runtime permissions for microphone and audio usage.
 
 ---
