@@ -2,7 +2,7 @@
 // Rule V: Permissions Service
 
 import { PermissionsAndroid, Platform } from 'react-native';
-import * as ExpoAudio from 'expo-audio';
+import { Audio } from 'expo-av';
 
 const requestMicrophonePermission = async () => {
   if (Platform.OS === 'android') {
@@ -31,10 +31,9 @@ const requestMicrophonePermission = async () => {
     }
   } else if (Platform.OS === 'ios') {
     try {
-      // Request permissions using expo-audio
-      const result = await ExpoAudio.requestRecordingPermissionsAsync();
+      // Request permissions using expo-av
+      const result = await Audio.requestPermissionsAsync();
       const granted = result.granted || result.status === 'granted';
-      
       console.log(`PermissionsService: Microphone permission ${granted ? 'granted' : 'denied'} (iOS)`);
       return granted;
     } catch (err) {
