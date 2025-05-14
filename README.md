@@ -12,9 +12,9 @@ Speak to Gemini and hear AI-powered responses played back through your device's 
 
 ---
 <div align="center">
-  <img src="assets/rnandroid1.png" height="300" style="display:inline-block;"/>
-  <img src="assets/rnandroid2.png" height="300" style="display:inline-block;"/>
-  <img src="assets/rnandroid3.png" height="300" style="display:inline-block;"/>
+  <img src="assets/rnandroid1.png" height="400" style="display:inline-block;"/>
+  <img src="assets/rnandroid2.png" height="400" style="display:inline-block;"/>
+  <img src="assets/rnandroid3.png" height="400" style="display:inline-block;"/>
 </div>
 
 ## Features
