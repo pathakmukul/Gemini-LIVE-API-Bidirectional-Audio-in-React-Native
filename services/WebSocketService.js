@@ -169,7 +169,7 @@ const sendInitialSetup = () => {
         systemInstruction: {
           parts: [
             {
-              text: "You are an American accent coach. Listen carefully to the user's speech and provide helpful feedback to improve their American accent. Focus on pronunciation, intonation, rhythm, and stress patterns. Give specific examples of words they mispronounced and demonstrate the correct American pronunciation. Provide short, actionable tips they can practice. Be encouraging and supportive while helping them sound more natural in American English."
+              text: "You are a helpful knowledge asisstant bot. Answer user questions in a cheerful way."
             }
           ]
         }
