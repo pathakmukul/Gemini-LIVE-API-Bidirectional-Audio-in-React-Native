@@ -1,6 +1,16 @@
 # Gemini Live API Bidirectional Audio Streaming App
 
-A React Native (Expo) application for real-time, bidirectional audio streaming with the Google Gemini Live API. Speak to Gemini and hear AI-powered responses played back through your device's main loudspeaker, enabling a natural, conversational experience. Features a sleek, modern UI with a dark textured background and intuitive controls.
+![Screenshot 1](assets/rnandroid1.png)
+![Screenshot 2](assets/rnandroid2.png)
+![Screenshot 3](assets/rnandroid3.png)
+
+A React Native (Expo) application for real-time, bidirectional audio streaming with the Google Gemini Live API ([BidiGenerateContent](https://ai.google.dev/api/live)).
+
+- Uses Gemini Live API for streaming audio and text.
+- Implements the [BidiGenerateContent](https://ai.google.dev/api/live) endpoint for bidirectional, low-latency communication.
+- Can be used as a smart AI assistant for natural, conversational experiences.
+
+Speak to Gemini and hear AI-powered responses played back through your device's main loudspeaker, enabling a natural, conversational experience. Features a sleek, modern UI with a dark textured background and intuitive controls.
 
 ---
 
