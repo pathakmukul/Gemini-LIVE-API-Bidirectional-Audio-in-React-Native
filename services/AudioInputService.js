@@ -12,6 +12,7 @@ import WebRTCAudioService from './WebRTCAudioService';
 
 // State variables
 let isRecording = false;
+let isMuted = false; // New mute state flag
 let recordingBuffer = [];
 let frameListener = null;
 let errorListener = null;
@@ -145,17 +146,22 @@ const initializeVoiceProcessor = async () => {
       // Log data for debugging
       console.log(`AudioInputService: Captured audio frame of ${audioData.byteLength} bytes`);
       
-      // Send to WebSocket if connection is ready
-      if (WebSocketService.isConnected() && WebSocketService.isSetupComplete()) {
-        WebSocketService.sendAudioChunk(audioData);
-      } else {
-        console.log('AudioInputService: WebSocket not ready, buffering audio');
-        recordingBuffer.push(audioData);
-        
-        // Prevent buffer from growing too large
-        if (recordingBuffer.length > 10) {
-          recordingBuffer.shift();
+      // Only send audio if not muted
+      if (!isMuted) {
+        // Send to WebSocket if connection is ready
+        if (WebSocketService.isConnected() && WebSocketService.isSetupComplete()) {
+          WebSocketService.sendAudioChunk(audioData);
+        } else {
+          console.log('AudioInputService: WebSocket not ready, buffering audio');
+          recordingBuffer.push(audioData);
+          
+          // Prevent buffer from growing too large
+          if (recordingBuffer.length > 10) {
+            recordingBuffer.shift();
+          }
         }
+      } else {
+        console.log('AudioInputService: Audio captured but muted - not sending');
       }
     };
     
@@ -219,15 +225,32 @@ const stopRecording = async () => {
     // Stop capturing audio
     await voiceProcessor.stop();
     
+    // Remove frame and error listeners to ensure no more callbacks occur
+    if (frameListener) {
+      voiceProcessor.removeFrameListener(frameListener);
+    }
+    
+    if (errorListener) {
+      voiceProcessor.removeErrorListener(errorListener);
+    }
+    
     // Clear buffer
     recordingBuffer = [];
     
     isRecording = false;
+    isMuted = false; // Reset mute state when stopping recording
     console.log('AudioInputService: Voice processing stopped');
     
-    // Note: We're intentionally NOT stopping AEC services here
-    // This is because we want to keep AEC active across recording sessions
-    // WebRTC AEC and InCallManager will be stopped when the app is done in cleanupResources
+    // We now stop WebRTC AEC here to ensure microphone is fully released
+    // This is a change from previous behavior where we kept AEC active
+    if (WebRTCAudioService.isProcessingActive()) {
+      try {
+        await WebRTCAudioService.stopAudioProcessing();
+        console.log('AudioInputService: WebRTC AEC stopped with recording');
+      } catch (aecErr) {
+        console.error('AudioInputService: Error stopping WebRTC AEC:', aecErr);
+      }
+    }
   } catch (err) {
     console.error('AudioInputService: Error stopping voice processing:', err);
   }
@@ -247,6 +270,15 @@ const sendBufferedAudio = () => {
 };
 
 const isRecordingActive = () => isRecording;
+
+// New mute functions
+const setMuted = (muted) => {
+  isMuted = muted;
+  console.log(`AudioInputService: Microphone ${muted ? 'muted' : 'unmuted'}`);
+  return true;
+};
+
+const isMicrophoneMuted = () => isMuted;
 
 // Clean up all audio input resources
 const cleanupResources = async () => {
@@ -290,6 +322,8 @@ export default {
   startRecording,
   stopRecording,
   isRecording: isRecordingActive,
+  setMuted,
+  isMuted: isMicrophoneMuted,
   sendBufferedAudio,
   cleanupResources,
 };

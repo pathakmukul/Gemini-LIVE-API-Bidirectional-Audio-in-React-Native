@@ -160,12 +160,19 @@ const sendInitialSetup = () => {
   }
   
   try {
-    // Create the setup message with just the model name
-    // The Gemini Live API requires minimal setup - just the model name
+    // Create the setup message with model name and system prompt for American accent training
+    // The Gemini Live API requires minimal setup - model name and optional system instructions
     // Audio responses are enabled by default for live models
     const setupMessage = {
       setup: {
-        model: MODEL_NAME
+        model: MODEL_NAME,
+        systemInstruction: {
+          parts: [
+            {
+              text: "You are an American accent coach. Listen carefully to the user's speech and provide helpful feedback to improve their American accent. Focus on pronunciation, intonation, rhythm, and stress patterns. Give specific examples of words they mispronounced and demonstrate the correct American pronunciation. Provide short, actionable tips they can practice. Be encouraging and supportive while helping them sound more natural in American English."
+            }
+          ]
+        }
       }
     };
     

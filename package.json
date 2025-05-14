@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^14.1.0",
     "@picovoice/react-native-voice-processor": "^1.2.3",
     "@speechmatics/expo-two-way-audio": "^0.1.2",
     "buffer": "^6.0.3",
