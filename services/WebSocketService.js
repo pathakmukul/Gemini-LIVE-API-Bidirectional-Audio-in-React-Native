@@ -19,11 +19,19 @@ let onTurnCompleteCallback = null;
 let setupCompleted = false;
 let audioChunkCounter = 0; // Keep track of chunks sent
 
+// Move the flag to a broader scope to ensure it's reset per connection
+if (typeof global.hasLoggedServerContentJson === 'undefined') {
+  global.hasLoggedServerContentJson = false;
+}
+
 const connect = () => {
   if (ws && ws.readyState === WebSocket.OPEN) {
     console.log('WebSocket already connected.');
     return;
   }
+
+  // Reset the flag when a new connection is established
+  global.hasLoggedServerContentJson = false;
 
   const apiKey = API_KEY; // Ensure API_KEY is loaded correctly
   if (!apiKey) {
@@ -69,7 +77,7 @@ const connect = () => {
       responseTime = ` (${timeSinceLastAudio}ms after last audio)`;
     }
     
-    console.log(`WebSocketService: Received message #${window._wsMessagesReceived}${responseTime}`);
+    // console.log(`WebSocketService: Received message #${window._wsMessagesReceived}${responseTime}`);
     
     try {
       // Handle binary data which could be either PCM audio or JSON in binary form
@@ -97,7 +105,7 @@ const connect = () => {
         
         const avgSize = window._binaryMessageSizes.reduce((sum, size) => sum + size, 0) / window._binaryMessageSizes.length;
         
-        console.log(`🪵 Binary messages received: ${window._binaryMessageSizes.length}, Average binary message size: ${avgSize.toFixed(2)} bytes, Binary message types received: ${JSON.stringify(window._binaryMessageTypes)}`);
+        // console.log(`🪵 Binary messages received: ${window._binaryMessageSizes.length}, Average binary message size: ${avgSize.toFixed(2)} bytes, Binary message types received: ${JSON.stringify(window._binaryMessageTypes)}`);
         
         // Process the binary data
         if (event.data instanceof ArrayBuffer) {
@@ -172,7 +180,9 @@ const sendInitialSetup = () => {
               text: "You are a helpful knowledge asisstant bot. Answer user questions in a cheerful way."
             }
           ]
-        }
+        },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
       }
     };
     
@@ -194,7 +204,7 @@ const processWebSocketBinaryData = (binaryData, ws, onMessageCallback, handleRec
   if (!window._binaryDataProcessed) window._binaryDataProcessed = 0;
   window._binaryDataProcessed++;
   
-  console.log(`WebSocketService: Processing binary data #${window._binaryDataProcessed} | Data type: ${binaryData.constructor.name} | Size: ${(binaryData instanceof ArrayBuffer ? binaryData.byteLength : binaryData.size)} bytes`);
+  // console.log(`WebSocketService: Processing binary data #${window._binaryDataProcessed} | Data type: ${binaryData.constructor.name} | Size: ${(binaryData instanceof ArrayBuffer ? binaryData.byteLength : binaryData.size)} bytes`);
   
   // Determine if this is JSON or audio data
   // For JSON, we expect the first few bytes to be ASCII characters like '{', '"', etc.
@@ -377,7 +387,6 @@ const sendAudioChunk = (audioBytes) => {
     const now = new Date().toISOString();
     const firstBytes = Array.from(new Uint8Array(audioBytes.slice(0, 16))); // Log first few bytes
 
-    console.log(`🔌🔌  WebSocketService: Sending audio chunk ArrayBuffer #${audioChunkCounter}`);
 
     // console.log(`🔌🔌  WebSocketService: Sending audio chunk ArrayBuffer #${audioChunkCounter} | Original size: ${audioBytes.byteLength} bytes | Duration: ${durationMs.toFixed(2)}ms (${(durationMs / 1000).toFixed(2)}s) | WebSocket state: ${ws.readyState} (OPEN) | Total audio chunks sent: ${audioChunkCounter}`);
 
@@ -397,11 +406,22 @@ const sendAudioChunk = (audioBytes) => {
   }
 };
 
+let onTranscriptCallback = null;
+
+const setOnTranscriptCallback = (callback) => {
+  console.log('WebSocketService: Transcript callback registered:', !!callback);
+  onTranscriptCallback = callback;
+};
+
 const handleReceivedMessage = (message) => {
+  // Debug: log first serverContent message structure once
   // Process received JSON messages from the Gemini Live API
   console.log('Processing JSON message from Gemini Live API');
-  // console.log('Full message structure:', JSON.stringify(message, null, 2).substring(0, 500) + '...');
-  
+  // DEBUG: dump serverContent JSON once
+  if (message.serverContent && !global.hasLoggedServerContentJson) {
+    console.log('🔍 WebSocketService raw serverContent:', JSON.stringify(message, null, 2).substring(0, 500));
+    global.hasLoggedServerContentJson = true;
+  }
   // Track message types for debugging
   if (!window._receivedMessageTypes) window._receivedMessageTypes = {};
   
@@ -434,7 +454,13 @@ const handleReceivedMessage = (message) => {
       
       console.log(`🪵 🎙 ${isFinal ? 'FINAL' : 'Interim'} transcript: "${transcript.text}" | Is final: ${isFinal}`); // merged 2 logs
       
-      // You could display this text in the UI or process it further
+      // Call transcript callback for UI updates
+      if (onTranscriptCallback) {
+        console.log('WebSocketService: Calling transcript callback with:', transcript.text, 'isFinal:', isFinal);
+        onTranscriptCallback({ text: transcript.text, isFinal, type: 'model' });
+      } else {
+        console.log('WebSocketService: Transcript event received but no callback registered');
+      }
     }
     
     // Check for turn completion
@@ -448,9 +474,35 @@ const handleReceivedMessage = (message) => {
   
   // Check for serverContent structure (main response container)
   if (message.serverContent) {
+    // Log the complete serverContent structure
+    console.log('🔍 COMPLETE GEMINI RESPONSE:', JSON.stringify(message.serverContent, null, 2));
     console.log(`🪵 Received serverContent message with properties: ${Object.keys(message.serverContent).join(', ')}`);
-    
-    // Check for text responses
+
+    // Handle direct inputTranscription (user's speech)
+    if (message.serverContent.inputTranscription && message.serverContent.inputTranscription.text) {
+      const transcriptText = message.serverContent.inputTranscription.text;
+      // Important: For user input, we need to check if this is a full sentence or just a fragment
+      // We'll use a heuristic: if the text ends with punctuation, it's likely final
+      const hasEndPunctuation = /[.?!,;]\s*$/.test(transcriptText);
+      
+      // Use explicit is_final flag if provided, otherwise use our heuristic
+      const isFinal = message.serverContent.inputTranscription.is_final !== undefined 
+        ? message.serverContent.inputTranscription.is_final 
+        : hasEndPunctuation;
+        
+      console.log(`🪵🎙️ Input transcript: "${transcriptText}" (Final: ${isFinal}, EndPunct: ${hasEndPunctuation})`);
+      onTranscriptCallback?.({ text: transcriptText, isFinal: isFinal, type: 'user' });
+    }
+
+    // Handle top-level outputTranscription (model's generated speech)
+    if (message.serverContent.outputTranscription && message.serverContent.outputTranscription.text) {
+      const transcriptText = message.serverContent.outputTranscription.text;
+      const isFinal = message.serverContent.outputTranscription.is_final || false;
+      console.log(`🪵 🎙 Transcript (from serverContent.outputTranscription): "${transcriptText}" (Final: ${isFinal})`);
+      onTranscriptCallback?.({ text: transcriptText, isFinal, type: 'model' });
+    }
+
+    // Check for text responses or audio within modelTurn parts
     if (
       message.serverContent.modelTurn &&
       message.serverContent.modelTurn.parts &&
@@ -461,18 +513,36 @@ const handleReceivedMessage = (message) => {
       message.serverContent.modelTurn.parts.forEach((part, index) => {
         console.log(`🪵 Examining part ${index} with properties: ${Object.keys(part).join(', ')}`);
         
-        // Handle text responses
+        // Handle transcript events within serverContent parts
+        if (part.transcript && part.transcript.text) {
+          const transcriptText = part.transcript.text;
+          const isFinal = part.transcript.is_final || false;
+          console.log(`🪵 🎙 ${isFinal ? 'FINAL' : 'Interim'} transcript (from part.transcript): "${transcriptText}" (Final: ${isFinal})`);
+          onTranscriptCallback?.({ text: transcriptText, isFinal: isFinal, type: 'model' });
+        }
+
+        // Check for 'outputTranscription' (model's generated speech transcript)
+        if (part.outputTranscription && part.outputTranscription.text) {
+          const transcriptText = part.outputTranscription.text;
+          const isFinal = part.outputTranscription.is_final || false;
+          console.log(`🪵 🎙 Transcript (from part.outputTranscription): "${transcriptText}" (Final: ${isFinal})`);
+          onTranscriptCallback?.({ text: transcriptText, isFinal: isFinal, type: 'model' });
+        }
+        
+        // Handle text parts directly (though less common for pure voice)
         if (part.text) {
           console.log(`🪵 Received text response in part ${index}: ${part.text}`);
-          // You could display this text in the UI
+          // Treat text parts as interim transcript
+          console.log('WebSocketService: Calling transcript callback for serverContent text:', part.text);
+          onTranscriptCallback?.({ text: part.text, isFinal: false, type: 'model' });
         }
         
         // Handle inline audio data (might be here instead of binary message)
         if (part.inlineData) {
-          console.log(`🪵 Found inlineData in part ${index} with properties: ${Object.keys(part.inlineData).join(', ')}`);
+          // console.log(`🪵 Found inlineData in part ${index} with properties: ${Object.keys(part.inlineData).join(', ')}`);
           
           if (part.inlineData.mimeType && part.inlineData.data) {
-            console.log(`🪵 Received inline audio data in part ${index}: MIME type: ${part.inlineData.mimeType} | Data length: ${part.inlineData.data.length} characters | Data type: ${typeof part.inlineData.data}`); // merged 4 logs
+            // console.log(`🪵 Received inline audio data in part ${index}: MIME type: ${part.inlineData.mimeType} | Data length: ${part.inlineData.data.length} characters | Data type: ${typeof part.inlineData.data}`); // merged 4 logs
             
             // First few characters if it's a string
             if (typeof part.inlineData.data === 'string') {
@@ -489,7 +559,7 @@ const handleReceivedMessage = (message) => {
               // Convert Node.js Buffer to ArrayBuffer for broader compatibility
               const arrayBuffer = audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength);
               
-              console.log(`🪵 Successfully decoded Base64 audio to ArrayBuffer (${arrayBuffer.byteLength} bytes) | Sending decoded ArrayBuffer to audio output service`); // merged 2 logs
+              // console.log(`🪵 Successfully decoded Base64 audio to ArrayBuffer (${arrayBuffer.byteLength} bytes) | Sending decoded ArrayBuffer to audio output service`); // merged 2 logs
               
               // Pass the decoded ArrayBuffer and mimeType to the callback
               onMessageCallback?.({ type: 'audio', data: arrayBuffer, mimeType: mimeType });
@@ -568,6 +638,7 @@ const WebSocketService = {
   setOnErrorCallback,
   setOnInterruptionCallback,
   setOnTurnCompleteCallback,
+  setOnTranscriptCallback,
   isConnected,
   isSetupComplete,
 };

@@ -31,18 +31,18 @@ let isInCallManagerInitialized = false;
 // Initialize InCallManager safely - only if available
 const initializeInCallManager = async () => {
   if (isInCallManagerInitialized) {
-    console.log('AudioOutputService: InCallManager already initialized');
+    // console.log('AudioOutputService: InCallManager already initialized');
     return true;
   }
   
   // Check if InCallManager is actually available
   if (!InCallManager) {
-    console.log('AudioOutputService: InCallManager not available, skipping initialization');
+    // console.log('AudioOutputService: InCallManager not available, skipping initialization');
     return false;
   }
   
   try {
-    console.log('AudioOutputService: Initializing InCallManager...');
+    // console.log('AudioOutputService: Initializing InCallManager...');
     
     // Add a small delay to ensure proper device initialization
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -71,7 +71,7 @@ const initializeInCallManager = async () => {
     // Now try to force speaker mode - with extra safety check
     if (InCallManager && typeof InCallManager.setForceSpeakerphoneOn === 'function') {
       InCallManager.setForceSpeakerphoneOn(true);
-      console.log('AudioOutputService: Speaker mode forced on');
+      // console.log('AudioOutputService: Speaker mode forced on');
     } else {
       console.warn('AudioOutputService: Could not force speaker mode - method not available');
     }
@@ -88,7 +88,7 @@ const initializeInCallManager = async () => {
 // Configure audio for playback
 const configureAudio = async () => {
   try {
-    console.log('AudioOutputService: Configuring audio...');
+    // console.log('AudioOutputService: Configuring audio...');
     
     // Initialize Audio with proper settings for playback - explicitly set for speaker mode
     await Audio.setAudioModeAsync({
@@ -103,7 +103,7 @@ const configureAudio = async () => {
       interruptionModeAndroid: 1,      // 1 = DO_NOT_MIX 
     });
     
-    console.log('AudioOutputService: Audio playback configured');
+    // console.log('AudioOutputService: Audio playback configured');
     
     // Only after Audio.setAudioModeAsync, initialize InCallManager
     const inCallManagerSuccess = await initializeInCallManager();
@@ -121,7 +121,7 @@ const configureAudio = async () => {
           interruptionModeAndroid: 1,     // 1 = DO_NOT_MIX
           playThroughEarpieceAndroid: false,
         });
-        console.log('AudioOutputService: iOS audio session set for speaker output');
+        // console.log('AudioOutputService: iOS audio session set for speaker output');
       } catch (iosError) {
         console.warn('AudioOutputService: Error configuring iOS audio session:', iosError);
       }
@@ -159,7 +159,7 @@ const _createWavFromPcm = (pcmData, sampleRate, numChannels, bitsPerSample) => {
     const pcmBytes = pcmData instanceof ArrayBuffer ? new Uint8Array(pcmData) : pcmData;
     const header = _createWavHeader(sampleRate, bitsPerSample, numChannels, pcmBytes.length);
     const wavData = _combineWavData(header, pcmBytes);
-    console.log(`📻👷 AudioOutputService: Created WAV (${wavData.length} bytes) from PCM (${pcmBytes.length} bytes) at ${sampleRate}Hz, ${numChannels}ch, ${bitsPerSample}bit`);
+    console.log(`📻👷 AudioOutputService: WAV with (${wavData.length} bytes) from PCM (${pcmBytes.length} bytes) at ${sampleRate}Hz, ${numChannels}ch, ${bitsPerSample}bit`);
     return wavData;
   } catch (error) {
     console.error('Error creating WAV from PCM:', error);
@@ -247,7 +247,7 @@ const _saveWavToTempFile = async (wavData) => {
     // Write the file
     await FileSystem.writeAsStringAsync(tempFilePath, base64Data, { encoding: FileSystem.EncodingType.Base64 });
     
-    console.log(`AudioOutputService: Saved WAV file to ${tempFilePath}`);
+    // console.log(`AudioOutputService: Saved WAV file to ${tempFilePath}`);
     return tempFilePath;
   } catch (error) {
     console.error('Error saving WAV to temp file:', error);
@@ -264,7 +264,7 @@ const _saveWavToTempFile = async (wavData) => {
  */
 const _playSoundObject = async (sound) => {
   try {
-    console.log('AudioOutputService: Playing sound object');
+    // console.log('AudioOutputService: Playing sound object');
     
     // Ensure audio is forced to speaker before every playback
     try {
@@ -307,7 +307,7 @@ const _playSoundObject = async (sound) => {
         InCallManager.setForceSpeakerphoneOn(true);
       }
       
-      console.log('AudioOutputService: Audio session re-activated for playback with speaker mode');
+      // console.log('AudioOutputService: Audio session re-activated for playback with speaker mode');
     } catch (sessionError) {
       console.warn('AudioOutputService: Error re-activating audio session:', sessionError);
       // Continue anyway, as the error might be that it's already activated
@@ -317,7 +317,7 @@ const _playSoundObject = async (sound) => {
     try {
       // Set the volume for this specific sound to maximum
       await sound.setVolumeAsync(1.0);
-      console.log('AudioOutputService: Sound volume set to maximum');
+      // console.log('AudioOutputService: Sound volume set to maximum');
     } catch (volumeError) {
       console.warn('AudioOutputService: Could not set sound volume:', volumeError);
     }
@@ -372,7 +372,7 @@ const _processQueue = async () => {
         const rateMatch = queueItem.mimeType.match(/rate=(\d+)/);
         if (rateMatch && rateMatch[1]) {
           sampleRate = parseInt(rateMatch[1], 10);
-          console.log(`AudioOutputService: Detected sample rate from mimeType: ${sampleRate}Hz`);
+          // console.log(`AudioOutputService: Detected sample rate from mimeType: ${sampleRate}Hz`);
         }
       }
     } else {
@@ -389,20 +389,20 @@ const _processQueue = async () => {
     }
     
     // Log detailed info about the audio data for debugging
-    console.log(
-      `🔊🔊 AudioOutputService: audioData type=${typeof audioData}` +
-      (audioData instanceof ArrayBuffer
-        ? `, ArrayBuffer length=${audioData.byteLength}`
-        : audioData instanceof Uint8Array
-        ? `, Uint8Array length=${audioData.length}`
-        : typeof audioData === 'string'
-        ? `, String length=${audioData.length}`
-        : '')
-    );
+    // console.log(
+    //   `🔊🔊 AudioOutputService: audioData type=${typeof audioData}` +
+    //   (audioData instanceof ArrayBuffer
+    //     ? `, ArrayBuffer length=${audioData.byteLength}`
+    //     : audioData instanceof Uint8Array
+    //     ? `, Uint8Array length=${audioData.length}`
+    //     : typeof audioData === 'string'
+    //     ? `, String length=${audioData.length}`
+    //     : '')
+    // );
     
     // Use detected sample rate or fallback to default
     const outputSampleRate = sampleRate || OUTPUT_SAMPLE_RATE;
-    console.log(`  - Using sample rate: ${outputSampleRate}Hz`);
+    // console.log(`  - Using sample rate: ${outputSampleRate}Hz`);
     
     // Create a WAV file from the PCM data
     let wavData;
@@ -410,12 +410,12 @@ const _processQueue = async () => {
     try {
       if (typeof audioData === 'string') {
         // Handle Base64 encoded audio
-        console.log('  - Converting Base64 string to PCM data');
+        // console.log('  - Converting Base64 string to PCM data');
         const pcmData = Buffer.from(audioData, 'base64');
         wavData = _createWavFromPcm(pcmData, outputSampleRate, OUTPUT_CHANNELS, OUTPUT_BITS_PER_SAMPLE);
       } else if (audioData instanceof ArrayBuffer || audioData instanceof Uint8Array) {
         // Handle raw PCM data
-        console.log('  - Converting ArrayBuffer/Uint8Array to WAV');
+        // console.log('  - Converting ArrayBuffer/Uint8Array to WAV');
         wavData = _createWavFromPcm(audioData, outputSampleRate, OUTPUT_CHANNELS, OUTPUT_BITS_PER_SAMPLE);
       } else {
         console.error('AudioOutputService: Unsupported audio data format', typeof audioData);
@@ -451,24 +451,24 @@ const _processQueue = async () => {
       }
       
       // Create a new sound object
-      console.log('AudioOutputService: Creating sound object from file:', tempFilePath);
+      // console.log('AudioOutputService: Creating sound object from file:', tempFilePath);
       soundObject = new Audio.Sound();
       
       // Make sure audio is enabled before loading
       await Audio.setIsEnabledAsync(true);
       
       // Load the sound with proper options
-      console.log('AudioOutputService: Loading sound file...');
+      // console.log('AudioOutputService: Loading sound file...');
       await soundObject.loadAsync(
         { uri: tempFilePath },
         { shouldPlay: false, progressUpdateIntervalMillis: 50 }
       );
-      console.log('AudioOutputService: Sound loaded successfully');
+      // console.log('AudioOutputService: Sound loaded successfully');
       
       // Set up completion listener
       soundObject.setOnPlaybackStatusUpdate(status => {
         if (status.didJustFinish) {
-          console.log('AudioOutputService: Playback finished');
+          // console.log('AudioOutputService: Playback finished');
           isPlaying = false;
           _processQueue(); // Process next item in queue
         }
@@ -481,7 +481,7 @@ const _processQueue = async () => {
       });
       
       // Play the sound
-      console.log('AudioOutputService: Playing audio');
+       console.log('AudioOutputService: Playing audio');
       const playSuccess = await _playSoundObject(soundObject);
       
       if (!playSuccess) {
@@ -512,7 +512,7 @@ const _combineAudioChunks = (chunks) => {
     return null;
   }
   
-  console.log(`AudioOutputService: Combining ${chunks.length} audio chunks`);
+  // console.log(`AudioOutputService: Combining ${chunks.length} audio chunks`);
   
   try {
     // Extract all PCM data from chunks
@@ -562,7 +562,7 @@ const _combineAudioChunks = (chunks) => {
       offset += data.length;
     }
     
-    console.log(`AudioOutputService: Combined ${chunks.length} chunks into ${totalLength} bytes`);
+    // console.log(`AudioOutputService: Combined ${chunks.length} chunks into ${totalLength} bytes`);
     return { data: combinedBuffer, sampleRate };
   } catch (error) {
     console.error('AudioOutputService: Error combining audio chunks:', error);
@@ -570,7 +570,7 @@ const _combineAudioChunks = (chunks) => {
   }
 };
 
-/**
+/**s
  * Process the buffered chunks when enough are collected or timeout occurs
  */
 const _processBufferedChunks = () => {
@@ -582,7 +582,7 @@ const _processBufferedChunks = () => {
   
   // If we have chunks to process
   if (bufferAggregator.length > 0) {
-    console.log(`AudioOutputService: Processing ${bufferAggregator.length} buffered chunks`);
+    // console.log(`AudioOutputService: Processing ${bufferAggregator.length} buffered chunks`);
     
     // Combine chunks and get the resulting audio data
     const combined = _combineAudioChunks(bufferAggregator);
@@ -639,11 +639,11 @@ const playAudioChunk = async (audioData) => {
         : 'no data field';
     }
     
-    console.log(` 🎵 AudioOutputService: Received audio chunk to play. Type: ${dataType}, Size: ${dataSize}${dataType === 'object' && audioData.mimeType ? `, MIME type: ${audioData.mimeType}` : ''}`);
+    // console.log(` 🎵 AudioOutputService: Received audio chunk to play. Type: ${dataType}, Size: ${dataSize}${dataType === 'object' && audioData.mimeType ? `, MIME type: ${audioData.mimeType}` : ''}`);
     
     // Add to buffer aggregator instead of directly to queue
     bufferAggregator.push(audioData);
-    console.log(`AudioOutputService: Added audio to buffer. Buffer size: ${bufferAggregator.length}`);
+    // console.log(`AudioOutputService: Added audio to buffer. Buffer size: ${bufferAggregator.length}`);
     
     // If this is the first chunk in the buffer, start the timer
     if (bufferAggregator.length === 1) {
@@ -719,7 +719,7 @@ const clearPlaybackQueue = async () => {
     if (isPlaying && soundObject) {
       try {
         await soundObject.stopAsync();
-        console.log('AudioOutputService: Stopped current playback');
+        // console.log('AudioOutputService: Stopped current playback');
       } catch (stopError) {
         console.warn('AudioOutputService: Error stopping playback:', stopError);
       }

@@ -1,8 +1,9 @@
 // screens/StreamingScreen.js
 // Rule VI: Main UI Screen
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert, StatusBar } from 'react-native';
+import TranscriptPopup from '../components/TranscriptPopup';
 import { MaterialIcons } from '@expo/vector-icons';
 import WebSocketService from '../services/WebSocketService';
 import AudioInputService from '../services/AudioInputService';
@@ -13,10 +14,20 @@ const StreamingScreen = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isTranscriptVisible, setIsTranscriptVisible] = useState(false);
+  const [transcriptHistory, setTranscriptHistory] = useState([]);
   const [statusMessage, setStatusMessage] = useState('Disconnected');
   const [serverSpeaking, setServerSpeaking] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [isFinalTranscript, setIsFinalTranscript] = useState(false);
+  // Track current turn IDs to group messages
+  const [currentUserTurnId, setCurrentUserTurnId] = useState(null);
+  const [currentModelTurnId, setCurrentModelTurnId] = useState(null);
+  // Use refs to access latest turn IDs in callbacks
+  const currentUserTurnIdRef = useRef(null);
+  const currentModelTurnIdRef = useRef(null);
   
   // Create background dots only once when component mounts
   const backgroundDots = useMemo(() => {
@@ -74,6 +85,104 @@ const StreamingScreen = () => {
     AudioOutputService.playAudioChunk(audioData);
   }, []);
 
+  // Update refs when state changes
+  useEffect(() => {
+    currentUserTurnIdRef.current = currentUserTurnId;
+  }, [currentUserTurnId]);
+
+  useEffect(() => {
+    currentModelTurnIdRef.current = currentModelTurnId;
+  }, [currentModelTurnId]);
+
+  // Transcript callback
+  useEffect(() => {
+    console.log('StreamingScreen: Setting up transcript callback');
+    WebSocketService.setOnTranscriptCallback(({ text, isFinal, type }) => {
+      console.log('StreamingScreen: Received transcript:', text, 'isFinal:', isFinal, 'type:', type);
+      setTranscript(text);
+      setIsFinalTranscript(isFinal);
+      
+      // Add or update bubble in transcript history
+      if (text && text.trim()) {
+        setTranscriptHistory(prev => {
+          // For user messages
+          if (type === 'user') {
+            // Get current ID from ref to avoid closure issues
+            const currentId = currentUserTurnIdRef.current;
+            
+            // If we don't have a current user turn or the last turn was final, create a new one
+            if (currentId === null || (prev.length > 0 && prev.find(msg => msg.id === currentId)?.isFinal)) {
+              const newId = Date.now();
+              // Update both state and ref
+              setCurrentUserTurnId(newId);
+              currentUserTurnIdRef.current = newId;
+              
+              const entry = { text, isFinal, type, id: newId };
+              console.log('Adding new user transcript entry:', entry);
+              return [...prev, entry];
+            }
+            
+            // Otherwise update the current user turn by APPENDING text, not replacing
+            console.log('Updating existing user transcript:', currentId);
+            return prev.map(msg => {
+              if (msg.id === currentId) {
+                // Append new text to existing text instead of replacing
+                return { 
+                  ...msg, 
+                  text: msg.text + text, 
+                  isFinal 
+                };
+              }
+              return msg;
+            });
+          }
+          
+          // For model messages
+          if (type === 'model') {
+            // Get current ID from ref to avoid closure issues
+            const currentId = currentModelTurnIdRef.current;
+            
+            // If we don't have a current model turn or the last turn was final, create a new one
+            if (currentId === null || (prev.length > 0 && prev.find(msg => msg.id === currentId)?.isFinal)) {
+              const newId = Date.now();
+              // Update both state and ref
+              setCurrentModelTurnId(newId);
+              currentModelTurnIdRef.current = newId;
+              
+              const entry = { text, isFinal, type, id: newId };
+              console.log('Adding new model transcript entry:', entry);
+              return [...prev, entry];
+            }
+            
+            // Otherwise update the current model turn by APPENDING text, not replacing
+            console.log('Updating existing model transcript:', currentId);
+            return prev.map(msg => {
+              if (msg.id === currentId) {
+                // Append new text to existing text instead of replacing
+                return { 
+                  ...msg, 
+                  text: msg.text + text, 
+                  isFinal 
+                };
+              }
+              return msg;
+            });
+          }
+          
+          // Fallback (shouldn't happen)
+          const entry = { text, isFinal, type, id: Date.now() };
+          console.log('Adding fallback transcript entry:', entry);
+          return [...prev, entry];
+        });
+      }
+    });
+    // Optional: cleanup
+    return () => {
+      console.log('StreamingScreen: Cleaning up transcript callback');
+      WebSocketService.setOnTranscriptCallback(null);
+    };
+  }, []);
+
   const handleStatusUpdate = useCallback((status) => {
     console.log('UI: WebSocket status update:', status);
     setIsLoading(false);
@@ -129,40 +238,60 @@ const StreamingScreen = () => {
     console.log('UI: Received turn complete signal.');
     setStatusMessage('Server turn complete.');
     setServerSpeaking(false);
+    
+    // Mark current model turn as final when turn is complete
+    if (currentModelTurnIdRef.current) {
+      setTranscriptHistory(prev => {
+        return prev.map(msg => {
+          if (msg.id === currentModelTurnIdRef.current) {
+            return { ...msg, isFinal: true };
+          }
+          return msg;
+        });
+      });
+    }
   }, []);
   // --- WebSocket Callbacks --- END ---
 
   // --- Effect Hook for Setup/Cleanup --- START ---
   // Effect to automatically start recording when connected
   useEffect(() => {
-    const startRecordingIfConnected = async () => {
-      if (isConnected) {
-        // Request permissions and start recording when connection is established
-        const hasPermission = await requestPermission();
-        
-        if (hasPermission) {
-          setStatusMessage('Starting audio capture...');
-          setIsLoading(true);
-          
-          const success = await AudioInputService.startRecording();
-          setIsRecording(success);
-          setIsLoading(false);
-          
-          if (success) {
-            setStatusMessage('Conversation active. Speak now!');
-          } else {
-            setStatusMessage('Connected, but audio capture failed.');
-            Alert.alert('Audio Error', 'Failed to start audio capture. Please try again.');
-          }
-        } else {
-          setStatusMessage('Connected, but microphone permission denied.');
-          Alert.alert('Permission Denied', 'Microphone permission is required for this app to work.');
-        }
+    console.log('StreamingScreen: Connection state changed:', isConnected);
+    if (isConnected) {
+      startRecordingIfConnected();
+    } else {
+      if (isRecording) {
+        AudioInputService.stopRecording();
+        setIsRecording(false);
       }
-    };
-    
-    startRecordingIfConnected();
+    }
   }, [isConnected]);
+
+  const startRecordingIfConnected = async () => {
+    if (isConnected) {
+      // Request permissions and start recording when connection is established
+      const hasPermission = await requestPermission();
+      
+      if (hasPermission) {
+        setStatusMessage('Starting audio capture...');
+        setIsLoading(true);
+        
+        const success = await AudioInputService.startRecording();
+        setIsRecording(success);
+        setIsLoading(false);
+        
+        if (success) {
+          setStatusMessage('Conversation active. Speak now!');
+        } else {
+          setStatusMessage('Connected, but audio capture failed.');
+          Alert.alert('Audio Error', 'Failed to start audio capture. Please try again.');
+        }
+      } else {
+        setStatusMessage('Connected, but microphone permission denied.');
+        Alert.alert('Permission Denied', 'Microphone permission is required for this app to work.');
+      }
+    }
+  };
 
   useEffect(() => {
     // Set callbacks for WebSocketService
@@ -203,20 +332,25 @@ const StreamingScreen = () => {
   };
 
   // Mute/Unmute handlers
-  const handleMuteToggle = async () => {
-    if (!isMuted) {
-      // Mute: Just set the mute flag in AudioInputService
-      AudioInputService.setMuted(true);
-      setIsMuted(true);
-      setStatusMessage('Microphone muted. You can still listen.');
-    } else {
-      // Unmute: Clear the mute flag in AudioInputService
-      AudioInputService.setMuted(false);
+  const handleMuteToggle = () => {
+    if (isMuted) {
+      // Unmute
       setIsMuted(false);
-      setStatusMessage('Microphone unmuted. Speak now!');
+      AudioInputService.setMuted(false);
+    } else {
+      // Mute
+      setIsMuted(true);
+      AudioInputService.setMuted(true);
     }
   };
-
+  
+  // Toggle transcript visibility - no sample messages
+  const handleTranscriptToggle = () => {
+    // Simply toggle visibility
+    setIsTranscriptVisible(prev => !prev);
+    console.log('Transcript visibility toggled:', !isTranscriptVisible);
+  };
+  
   // Single function to handle toggling conversation state
   const toggleConversation = async () => {
     if (!isConnected) {
@@ -266,12 +400,19 @@ const StreamingScreen = () => {
   // --- Button Handlers --- END ---
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.fullScreenContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#121212" />
+      {/* Background texture layer that covers the entire screen */}
       <View style={styles.backgroundTexture}>
         {/* Create subtle texture pattern with multiple semi-transparent dots */}
         {backgroundDots}
+      </View>
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
         <Text style={styles.title}>Live Audio Streaming</Text>
+
+        {/* Log transcript state but don't display on main screen */}
+        {console.log('StreamingScreen render - transcript state:', transcript ? transcript.substring(0, 20) + '...' : 'empty')}
 
         <View style={styles.statusContainer}>
           <Text style={styles.statusText}>Status: {statusMessage}</Text>
@@ -281,42 +422,79 @@ const StreamingScreen = () => {
 
         <View style={styles.buttonContainer}>
           <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.circleButton, {backgroundColor: !isConnected ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 99, 71, 0.9)"}]}
-              onPress={toggleConversation}
-              disabled={isLoading}
-              activeOpacity={0.7}
-            >
-              <View style={styles.buttonGlow} />
-              <Text style={[styles.buttonText, {color: !isConnected ? '#000000' : '#ffffff'}]}>{!isConnected ? "Start" : "Stop"}</Text>
-            </TouchableOpacity>
-            
-            {isConnected && (
+            {/* Main Start/Stop button centered */}
+            <View style={styles.mainButtonContainer}>
               <TouchableOpacity
-                style={styles.muteButton}
-                onPress={handleMuteToggle}
+                style={[styles.circleButton, {backgroundColor: !isConnected ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 99, 71, 0.9)"}]}
+                onPress={toggleConversation}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
-                <MaterialIcons 
-                  name={isMuted ? "mic-off" : "mic"} 
-                  size={32} 
-                  color={isMuted ? "#888" : "#ffffff"} 
-                />
+                <View style={styles.buttonGlow} />
+                <Text style={[styles.buttonText, {color: !isConnected ? '#000000' : '#ffffff'}]}>{!isConnected ? "Start" : "Stop"}</Text>
               </TouchableOpacity>
+            </View>
+            
+            {/* Secondary buttons positioned at 1/3 and 2/3 of right half */}
+            {isConnected && (
+              <>
+                {/* Transcript button at 1/3 from center to right edge */}
+                <TouchableOpacity
+                  style={[styles.secondaryButton, styles.transcriptButton]}
+                  onPress={handleTranscriptToggle}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons 
+                    name={"chat"} 
+                    size={28} 
+                    color={isTranscriptVisible ? "#4CAF50" : "#ffffff"} 
+                  />
+                </TouchableOpacity>
+                
+                {/* Mute button at 2/3 from center to right edge */}
+                <TouchableOpacity
+                  style={[styles.secondaryButton, styles.muteButton]}
+                  onPress={handleMuteToggle}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons 
+                    name={isMuted ? "mic-off" : "mic"} 
+                    size={32} 
+                    color={isMuted ? "#888" : "#ffffff"} 
+                  />
+                </TouchableOpacity>
+              </>
             )}
           </View>
+          
+
         </View>
-      </View>
-      </View>
-    </SafeAreaView>
+        </View>
+        {/* Transcript popup using the separate component, now overlays the whole main content */}
+        <TranscriptPopup 
+          visible={isTranscriptVisible} 
+          onClose={() => setIsTranscriptVisible(false)} 
+          transcripts={transcriptHistory} 
+        />
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#121212',
+    width: '100%',
+    height: '100%',
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent', // Make it transparent to show the background texture
+    width: '100%',
+    height: '100%',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -325,7 +503,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
   },
-  muteButton: {
+  mainButtonContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    left: '50%', // Centered horizontally
+    marginLeft: -40, // Half of the button width to center it
+  },
+  secondaryButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
@@ -333,7 +518,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.25)',
     position: 'absolute',
-    right: '15%', // Position in the center of the right side of the screen
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
@@ -342,12 +526,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
+  transcriptButton: {
+    left: '65%', // Position at 1/3 of the distance from center to right edge
+    zIndex: 10,
+  },
+  muteButton: {
+    left: '85%', // Position at 2/3 of the distance from center to right edge
+  },
   backgroundTexture: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     width: '100%',
     height: '100%',
     backgroundColor: '#121212',
-    position: 'relative',
+    zIndex: 0,
     overflow: 'hidden',
   },
   textureDot: {
@@ -428,7 +623,8 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: 10,
-  }
+  },
+  // All transcript content styles have been moved to TranscriptPopup component
 });
 
 export default StreamingScreen;

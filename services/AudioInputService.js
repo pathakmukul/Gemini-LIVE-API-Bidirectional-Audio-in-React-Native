@@ -144,7 +144,7 @@ const initializeVoiceProcessor = async () => {
       const audioData = new Int16Array(frame).buffer;
       
       // Log data for debugging
-      console.log(`AudioInputService: Captured audio frame of ${audioData.byteLength} bytes`);
+      // console.log(` of ${audioData.byteLength} bytes`);
       
       // Only send audio if not muted
       if (!isMuted) {
@@ -161,7 +161,7 @@ const initializeVoiceProcessor = async () => {
           }
         }
       } else {
-        console.log('AudioInputService: Audio captured but muted - not sending');
+        // console.log('AudioInputService: Audio captured but muted - not sending');
       }
     };
     
