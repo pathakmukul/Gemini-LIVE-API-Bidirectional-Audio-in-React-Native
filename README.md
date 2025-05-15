@@ -27,6 +27,17 @@ Speak to Gemini and hear AI-powered responses played back through your device's 
   - Implements echo cancellation to prevent audio feedback loops.
   - Eliminates the problem of the microphone picking up speaker output.
 
+- **Transcript Popup:**
+  - View a live transcript of your conversation in a chat-like popup.
+  - User messages appear as green bubbles on the right, AI messages as dark bubbles on the left.
+  - Transcript logs both your speech and the AI's responses in real time.
+  - Easily accessible with a dedicated Transcript button next to the Start button.
+
+- **Mute Button:**
+  - Mute/Unmute the microphone to control audio input.
+  - Doesnt close the connection with Gemini Live API; only stops sharing audio with it.
+  - Even when muted, the app continues to receive and play back AI responses which were already generated.
+
 - **Speaker Routing:**
   - Forces playback through the bottom-firing (loud) speakers, not the earpiece.
   - Includes robust fallback mechanisms to ensure proper audio routing.
@@ -43,6 +54,7 @@ Speak to Gemini and hear AI-powered responses played back through your device's 
   - Dark textured background with subtle visual elements
   - Intuitive circular glowing button for easy interaction
   - Clean, readable typography with visual feedback
+
 
 
 ---
@@ -96,6 +108,7 @@ Speak to Gemini and hear AI-powered responses played back through your device's 
 - Your voice is streamed to Gemini and you'll hear the AI's response played through the main speaker.
 - Visual indicators show when the AI is speaking and the current status.
 - All audio is routed through the loudspeaker for maximum clarity.
+- **To view the transcript, tap the Transcript button next to Start/Stop. The popup will show a live chat log of your conversation.**
 
 ---
 
